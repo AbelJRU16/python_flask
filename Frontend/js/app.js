@@ -26,6 +26,7 @@ btn_add.addEventListener('click', (e)=>{
     e.preventDefault();
     modal.setAttribute('class', 'modale opened');
     modal_title.innerHTML="Agregar Usuario";
+    empty_data();
 });
 
 close_modal.addEventListener('click', (e)=>{
@@ -34,10 +35,10 @@ close_modal.addEventListener('click', (e)=>{
     modal.setAttribute('class', 'modale');
 });
 
-btn_save.addEventListener('click', (e)=>{
-    e.preventDefault();
-    modal.setAttribute('class', 'modale');
-})
+// btn_save.addEventListener('click', (e)=>{
+//     e.preventDefault();
+//     modal.setAttribute('class', 'modale');
+// })
 
 window.onload = ()=>{
     get_all_clients();
@@ -47,6 +48,7 @@ window.onload = ()=>{
 const edit_client = (id)=>{
     selected_client = clients.find(element => element.id == id)
     modal.setAttribute('class', 'modale opened');
+    modal_title.innerHTML="Actualizar Usuario";
 
     document.querySelector("[name='name']").value = selected_client.name;
     document.querySelector("[name='lastName']").value = selected_client.last_name;
@@ -64,19 +66,62 @@ const empty_data = ()=>{
 
 const save_data = ()=>{
     if(Object.keys(selected_client).length === 0){
-        console.log("Save")
+        create_client();
     }else{
         update_client();
     }
 }
 
+const format_errors = (errors)=>{
+    let template = '<ul>';
+    errors.forEach(element => {
+        template+= (element != '') ? '<li>'+element+'</li>' : ''; 
+    })
+    template += '</ul>';
+    return template
+}
+
 //backend functions
-const get_all_clients = ()=>{
-    fetch('http://127.0.0.1:3000/customers')
-    .then(resp => resp.json())
-    .then(data =>{
+const create_client = async () => {
+    try {
+        const resp = await fetch('http://127.0.0.1:3000/customers', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: document.querySelector("[name='name']").value,
+                last_name: document.querySelector("[name='lastName']").value,
+                email: document.querySelector("[name='mail']").value,
+                cellphone: document.querySelector("[name='cellphone']").value,
+            })
+        });
+        const data = await resp.json()
+        if(resp.status == 406){
+            Swal.fire({
+                title: data.message,
+                html: format_errors(data.errors),
+                icon: "error",
+            });
+        }else{
+            modal.setAttribute('class', 'modale');
+            Swal.fire({
+                title: data.message,
+                icon: "success",
+            });
+            get_all_clients();            
+        }
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+const get_all_clients = async () => {
+    let template = '';
+    try {
+        const resp = await fetch('http://127.0.0.1:3000/customers');
+        const {data} = await resp.json();
         clients = data;
-        let template = '';
         if(data.length > 0){
             data.forEach(element => {
                 template += '<tr>'
@@ -92,31 +137,78 @@ const get_all_clients = ()=>{
             });
         }else{
             template = '<tr><td colspan="5">No hay clientes registrados</td></tr>'
+        }        
+    } catch (error) {
+        console.error(error);
+    } finally{
+        table_body.innerHTML = (template != '') ? template : '<tr><td colspan="5">No hay clientes registrados</td></tr>';
+    }
+}
+
+const update_client = async () => {
+    try {
+        const resp = await fetch('http://127.0.0.1:3000/customers/'+selected_client.id, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: document.querySelector("[name='name']").value,
+                last_name: document.querySelector("[name='lastName']").value,
+                email: document.querySelector("[name='mail']").value,
+                cellphone: document.querySelector("[name='cellphone']").value,
+            })
+        });
+        const data = await resp.json()
+        if(resp.status == 406){
+            Swal.fire({
+                title: data.message,
+                html: format_errors(data.errors),
+                icon: "error",
+            });
+        }else{
+            modal.setAttribute('class', 'modale');
+            Swal.fire({
+                title: data.message,
+                icon: "success",
+            });
+            get_all_clients();            
         }
-        table_body.innerHTML = template;
-    })
-    .catch(error => console.error(error))
+    } catch (error) {
+        console.error(error);
+    }
 }
 
-const update_client = ()=>{
-    fetch('http://127.0.0.1:3000/customers/'+selected_client.id, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            name: document.querySelector("[name='name']").value,
-            last_name: document.querySelector("[name='lastName']").value,
-            email: document.querySelector("[name='mail']").value,
-            cellphone: document.querySelector("[name='cellphone']").value,
-        })
+const remove_client = async (id) => {
+    let client = clients.find(element => element.id == id)
+    const result = await Swal.fire({
+        icon: 'question',
+        title: "Quieres eliminar a "+ client.name +' '+ client.last_name+'?',
+        showDenyButton: true,
+        confirmButtonText: "Eliminar",
+        denyButtonText: "Cancelar"
     })
-    .then(response => response.json())
-    .then(data => {
-        console.log('Respuesta:', data);
-    })
-    .catch(error => {
-        console.error('Error:', error);
-    });
+    if(!result.isConfirmed) return
+    try {
+        const resp = await fetch('http://127.0.0.1:3000/customers/'+id, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: document.querySelector("[name='name']").value,
+                last_name: document.querySelector("[name='lastName']").value,
+                email: document.querySelector("[name='mail']").value,
+                cellphone: document.querySelector("[name='cellphone']").value,
+            })
+        });
+        const data = await resp.json()
+        Swal.fire({
+            title: data.message,
+            icon: "success",
+        });
+        get_all_clients();
+    } catch (error) {
+        console.error(error);
+    }
 }
-

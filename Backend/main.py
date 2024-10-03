@@ -1,6 +1,8 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 from flask_mysqldb import MySQL
 from flask_cors import CORS
+import json
+from ValidateClient import ValidateClient
 
 app = Flask(__name__)
 CORS(app)  # Habilita CORS para todas las rutas
@@ -19,17 +21,22 @@ def save_customer():
         last_name = request.json['last_name']
         email = request.json['email']
         cellphone = request.json['cellphone']
-    
-        #execuitng query
-        cur = mysql.connection.cursor()
-        query = 'INSERT INTO users (name, last_name, email, cellphone) VALUES (%s, %s, %s, %s)'
-        values = (name, last_name, email, cellphone)
-        cur.execute(query, values)
-        mysql.connection.commit()
-        cur.close()
-        return "Cliente guardado"
+
+        #Validating
+        client = ValidateClient(name, last_name, email, cellphone)
+        if(client.get_errors() == []):
+            #execuitng query
+            cur = mysql.connection.cursor()
+            query = 'INSERT INTO users (name, last_name, email, cellphone) VALUES (%s, %s, %s, %s)'
+            values = (name, last_name, email, cellphone)
+            cur.execute(query, values)
+            mysql.connection.commit()
+            cur.close()
+            return make_response({'message': "Cliente guardado"}, 201)
+        else:
+            return make_response({'message': "Ha sucedido un error", 'errors': client.get_errors()}, 406)
     except Exception as e:
-        return "Ha sucedido un error: "+e
+        return make_response({'message': f"Ha sucedido un error: {e}"}, 400)
     
 @app.route('/customers/<int:user_id>', methods=['PUT'])
 def edit_customer(user_id):
@@ -39,20 +46,25 @@ def edit_customer(user_id):
         last_name = request.json['last_name']
         email = request.json['email']
         cellphone = request.json['cellphone']
-    
-        #execuitng query
-        cur = mysql.connection.cursor()
-        query = """
-        UPDATE users 
-        SET name = %s, last_name = %s,email = %s, cellphone = %s
-        WHERE id = %s"""
-        values = (name, last_name, email, cellphone, user_id)
-        cur.execute(query, values)
-        mysql.connection.commit()
-        cur.close()
-        return "Cliente actualizado"
+
+        #Validating
+        client = ValidateClient(name, last_name, email, cellphone)
+        if(client.get_errors() == []):
+            #execuitng query
+            cur = mysql.connection.cursor()
+            query = """
+            UPDATE users 
+            SET name = %s, last_name = %s,email = %s, cellphone = %s
+            WHERE id = %s"""
+            values = (name, last_name, email, cellphone, user_id)
+            cur.execute(query, values)
+            mysql.connection.commit()
+            cur.close()
+            return make_response({'message': "Cliente actualizado"}, 201)
+        else:
+            return make_response({'message': "Ha sucedido un error", 'errors': client.get_errors()}, 406)
     except Exception as e:
-        return "Ha sucedido un error: "+e
+        return make_response({'message': f"Ha sucedido un error: {e}"}, 400)
 
 @app.route('/customers/<int:id>', methods=['DELETE'])
 def delete_customer(id):
@@ -63,9 +75,9 @@ def delete_customer(id):
         cur.execute(query)
         mysql.connection.commit()
         cur.close()
-        return 'Se ha eliminado el cliente'
+        return make_response({'message': 'Se ha eliminado el cliente'}, 200)
     except Exception as e:
-        return "Ha sucedido un error: "+e
+        return make_response({'message': f"Ha sucedido un error: {e}"}, 400)
 
 @app.route('/customers/<int:id>')
 def get_customer(id):
@@ -87,9 +99,9 @@ def get_customer(id):
             result.append(content)
         mysql.connection.commit()
         cur.close()
-        return jsonify(result)
+        return make_response({'message': 'El cliente ha sido encontrado', 'data': result}, 200)
     except Exception as e:
-        return "Ha sucedido un error: "+e
+        return make_response({'message': f"Ha sucedido un error: {e}"}, 400)
 
 @app.route('/customers')
 def list_customers():
@@ -111,13 +123,19 @@ def list_customers():
             result.append(content)
         mysql.connection.commit()
         cur.close()
-        return jsonify(result)
+        return make_response({'message': 'OK', 'data': result}, 200)
     except Exception as e:
-        return "Ha sucedido un error: "+e
+        return make_response({'message': f"Ha sucedido un error: {e}"}, 400)
 
 @app.route('/')
 def index():
-    return 'Hello World'
+    return 'Hello World' 
+
+def make_response(data, code):
+    response = Response(json.dumps(data), status=code, mimetype='application/json')
+    response.headers['Content-Type'] = 'application/json'
+    response.headers['Cache-Control'] = 'no-cache'
+    return response
 
 if __name__ == '__main__':
     app.run(None, 3000, True)
